@@ -368,6 +368,8 @@ gcloud compute instances create ml-server \
   --boot-disk-size=30GB \
   --tags=http-server,https-server
 
+## resources: try other zones if us-central1-a is not available eg. us-east1-b, us-west1-a, us-west1-c.
+
 # Allow firewall
 gcloud compute firewall-rules create allow-ml-serving \
   --allow=tcp:8000 \
@@ -379,8 +381,13 @@ gcloud compute ssh ml-server --zone=us-central1-a
 # Stop instance (to save costs)
 gcloud compute instances stop ml-server --zone=us-central1-a
 
+## Run the stop command on your local machine, not inside the VM. Stopping the instance will save costs, but you will still be charged for storage.
+
 # Delete instance
 gcloud compute instances delete ml-server --zone=us-central1-a
+
+## Note: Deleting the instance will also delete the boot disk unless you specify --keep-disk. If you want to keep the disk for later use, use --keep-disk flag.
+
 ```
 
 ### Azure Setup
@@ -506,6 +513,11 @@ gcloud compute instances create ml-trainer \
 # Add to instance's crontab:
 0 18 * * * sudo shutdown -h now  # Shutdown at 6 PM
 ```
+0 - min
+18 - hour
+* - day of month
+* - month
+* - day of week
 
 **4. Use Reserved Instances for Steady Workloads**
 ```bash
@@ -561,10 +573,21 @@ gcloud compute instances create web-server \
 # 2. SSH into instance
 gcloud compute ssh web-server --zone=us-central1-a
 
+# if facing issues with SSH, ensure your firewall rules allow SSH (port 22) and that your local machine has the correct SSH key.
+# if passwordless SSH is not set up, you may need to generate an SSH key pair and add the public key to your cloud provider's console.
+# if you forgot your ssh key passphrase, you can change the old one. by creating a backup of your private key and generating a new one, 
+# then updating the cloud provider with the new public key. eg. mv ~/.ssh/google_compute_engine ~/.ssh/google_compute_engine.old
+##  mv ~/.ssh/google_compute_engine.pub ~/.ssh/google_compute_engine.pub.old
+##  gcloud compute ssh web-server --zone=us-central1-a
+
 # 3. Install dependencies
+# create a virtual environment to avoid polluting the system Python - this also resolves issues with the VM missing virtual environment packages.
 sudo apt update
-sudo apt install -y python3-pip
-pip3 install fastapi uvicorn
+sudo apt install -y python3-venv python3-pip
+python3 -m venv ai-infra-venv
+source ai-infra-venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install fastapi "uvicorn[standard]"
 
 # 4. Create simple app
 cat > app.py << 'EOF'
@@ -582,9 +605,13 @@ def health():
 EOF
 
 # 5. Run server
-uvicorn app:app --host 0.0.0.0 --port 8000 &
+python3 uvicorn -m app:app --host 0.0.0.0 --port 8000 
 
-# 6. Test locally
+# 6. Test locally from the VM not your machine
+# create a new terminal window and SSH into the instance again, 
+gcloud compute ssh web-server --zone=us-central1-a
+
+# then run:
 curl http://localhost:8000
 
 # 7. Exit SSH and test externally
@@ -593,6 +620,10 @@ EXTERNAL_IP=$(gcloud compute instances describe web-server \
   --zone=us-central1-a \
   --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
 
+  # the above command creates a shell variable EXTERNAL_IP that stores the public IP address of the instance. you can then use this variable to test the web server from your local machine.
+  # print out the external IP to verify
+  echo "External IP: $EXTERNAL_IP"
+
 # Create firewall rule
 gcloud compute firewall-rules create allow-http-8000 \
   --allow=tcp:8000 \
@@ -600,6 +631,9 @@ gcloud compute firewall-rules create allow-http-8000 \
 
 # Test from your machine
 curl http://$EXTERNAL_IP:8000
+
+# 8. Clean up - delete the instance to avoid charges note: it deletes the instance and all associated resources, including the boot disk. if you want to keep the disk for later use, use --keep-disk flag.
+gcloud compute instances delete web-server --zone=us-central1-a --quiet
 ```
 
 ## Cloud Best Practices for ML

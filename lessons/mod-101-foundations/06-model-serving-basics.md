@@ -49,12 +49,14 @@ Can Retry                  Must Succeed First Try
 | Aspect | Training | Serving |
 |--------|----------|---------|
 | **Time Constraint** | Hours/Days | Milliseconds |
-| **Data Volume** | Millions of samples | 1 sample at a time |
+| **Data Volume** | Millions of samples | 1* sample at a time |
 | **Compute** | Parallel/Distributed | Single inference |
 | **Optimization Goal** | Accuracy | Latency + Throughput |
 | **Fault Tolerance** | Can retry | Must be reliable |
 | **Scaling** | Horizontal (more GPUs) | Horizontal (more replicas) |
 | **Cost Model** | Temporary | Continuous |
+
+* Data samples are often batched for efficiency, but serving is typically one request at a time.
 
 ## Model Serving Requirements
 
